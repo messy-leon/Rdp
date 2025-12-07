@@ -14,14 +14,19 @@ jobs:
     timeout-minutes: ${{ github.event.inputs.duration }}
 
     steps:
-      - name: Create Dynamic User Credentials
-        id: creds
-        shell: pwsh
+      - name: Configure Core RDP Settings
         run: |
-          $wordList = @("admin", "dev", "test", "build", "remote", "system", "runner")
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
+          netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
+
+      - name: Create Dynamic RDP User
+        id: credentials
+        run: |
+          $wordList = @("admin", "dev", "test", "build", "remote", "system")
           $randomNumber = Get-Random -Minimum 100 -Maximum 999
           $userName = "$($wordList | Get-Random)-$($randomNumber)"
-
+          
           Add-Type -AssemblyName System.Security
           $charSet = @{
               Upper   = [char[]](65..90); Lower = [char[]](97..122)
@@ -34,65 +39,49 @@ jobs:
           $rawPassword += $charSet.Special | Get-Random -Count 4
           $password = -join ($rawPassword | Sort-Object { Get-Random })
           
+          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+          New-LocalUser -Name $userName -Password $securePass -AccountNeverExpires
+          Add-LocalGroupMember -Group "Administrators" -Member $userName
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member $userName
+          
           echo "RDP_USER=$userName" >> $env:GITHUB_ENV
           echo "RDP_PASS=$password" >> $env:GITHUB_ENV
-          echo "::set-output name=user::$userName"
-          echo "::set-output name=pass::$password"
 
-      - name: Configure and Create RDP User
-        shell: pwsh
-        run: |
-          $securePass = ConvertTo-SecureString "${{ env.RDP_PASS }}" -AsPlainText -Force
-          New-LocalUser -Name "${{ env.RDP_USER }}" -Password $securePass -AccountNeverExpires
-          Add-LocalGroupMember -Group "Administrators" -Member "${{ env.RDP_USER }}"
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "${{ env.RDP_USER }}"
-          
-          if (-not (Get-LocalUser -Name "${{ env.RDP_USER }}")) {
-              Write-Error "User creation failed"; exit 1
-          }
-
-      - name: Configure RDP Settings
-        run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
-          netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
-          
       - name: Install Tailscale
         run: |
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "tailscale_setup.exe"
           ./tailscale_setup.exe /quiet
 
       - name: Establish Tailscale Connection
-        id: ts
         run: |
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID --force-reauth
+          Start-Sleep -Seconds 10
           $tsIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
-          if (-not $tsIP) { Write-Error "Tailscale IP not assigned."; exit 1 }
-          echo "::set-output name=ip::$tsIP"
+          if (-not $tsIP) { Write-Error "Tailscale IP not assigned. Exiting."; exit 1 }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
       
       - name: Create RDP Connection File
         shell: pwsh
         run: |
-          $rdpContent = "full address:s:${{ steps.ts.outputs.ip }}:3389`nusername:s:${{ steps.creds.outputs.user }}"
+          $rdpContent = "full address:s:${{ env.TAILSCALE_IP }}`nusername:s:${{ env.RDP_USER }}"
           Set-Content -Path "connect.rdp" -Value $rdpContent
       
       - name: Upload RDP File as Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: RDP-File
+          name: RDP-Connection-File
           path: connect.rdp
 
-      - name: Maintain Connection
-        shell: pwsh
+      - name: Display Connection Details and Maintain Connection
         run: |
           Write-Host "`n=== RDP ACCESS DETAILS ==="
           Write-Host "Address:  ${{ env.TAILSCALE_IP }}"
           Write-Host "Username: ${{ env.RDP_USER }}"
           Write-Host "Password: ${{ env.RDP_PASS }}"
           Write-Host "==========================`n"
+          Write-Host "Find the 'connect.rdp' file in the Artifacts section of the summary page."
           
           while ($true) {
-              Write-Host "[$(Get-Date)] RDP session is active. Cancel the workflow to terminate."
               Start-Sleep -Seconds 300
+              Write-Host "[$(Get-Date)] Session is active. Cancel the workflow to terminate."
           }
