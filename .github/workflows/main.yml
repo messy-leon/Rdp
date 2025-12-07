@@ -2,16 +2,11 @@ name: RDP
 
 on:
   workflow_dispatch:
-    inputs:
-      duration:
-        description: 'RDP lifetime in minutes (max 350)'
-        required: true
-        default: '120'
 
 jobs:
   secure-rdp:
     runs-on: windows-latest
-    timeout-minutes: ${{ github.event.inputs.duration }}
+    timeout-minutes: 350
 
     steps:
       - name: Configure Core RDP Settings
@@ -21,7 +16,6 @@ jobs:
           netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
 
       - name: Create Dynamic RDP User
-        id: credentials
         run: |
           $wordList = @("admin", "dev", "test", "build", "remote", "system")
           $randomNumber = Get-Random -Minimum 100 -Maximum 999
