@@ -1,43 +1,40 @@
-name: Master-Linux-RDP
+name: Strong-Windows-RDP
 on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    timeout-minutes: 3600  # 6 Hours Limit
+
     steps:
-      - name: Install Desktop (Fast & Stable)
+      - name: Optimize Windows & Enable RDP
         run: |
-          sudo apt update
-          # dbus-x11 aur xfce4-session black screen ko khatam karte hain
-          sudo DEBIAN_FRONTEND=noninteractive apt install -y xfce4 xfce4-goodies xrdp dbus-x11 firefox
-          
-          # XRDP Configuration (Simple & Working)
-          sudo adduser xrdp ssl-cert
-          echo "xfce4-session" > ~/.xsession
-          sudo systemctl enable xrdp
-          sudo systemctl start xrdp
+          # Disable background services to save RAM
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
 
-      - name: Setup User
+      - name: Create Strong User
         run: |
-          # Mobile user ke liye aasaan password
-          PASSWORD="Pass${{ github.run_id }}"
-          sudo useradd -m RDP -s /bin/bash
-          echo "RDP:$PASSWORD" | sudo chpasswd
-          sudo usermod -aG sudo RDP
-          echo "RDP_PASS=$PASSWORD" >> $GITHUB_ENV
+          $pass = "StrongPass@${{ github.run_id }}"
+          net user RDP $pass /add
+          net localgroup administrators RDP /add
+          echo "PASSWORD=$pass" >> $env:GITHUB_ENV
 
-      - name: Tailscale Connection
+      - name: Connect Tailscale
         run: |
-          curl -fsSL https://tailscale.com/install.sh | sh
-          # Agar Secret mein Auth Key hai toh turant connect hoga
-          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-linux-${{ github.run_id }} || sudo tailscale up --hostname=gh-linux-${{ github.run_id }}
+          Invoke-WebRequest https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi -OutFile tailscale.msi
+          msiexec.exe /i tailscale.msi /quiet
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-rdp-${{ github.run_id }}
+          $ts_ip = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+          echo "IP=$ts_ip" >> $env:GITHUB_ENV
 
-      - name: Access Details
+      - name: RDP Details & Keep Alive
         run: |
-          echo -e "\n=== 🖥️ RDP READY HAI! ==="
-          echo "Username: RDP"
-          echo "Password: $RDP_PASS"
-          echo "IP: Check in Tailscale App/Dashboard"
-          echo "=========================\n"
-          # 6 ghante tak active rakhne ke liye
-          while true; do sleep 300; done
+          echo "`n=== 🖥️ WINDOWS RDP READY ==="
+          echo "IP: $env:IP"
+          echo "User: RDP"
+          echo "Pass: $env:PASSWORD"
+          echo "===========================`n"
+          # Loop to keep it alive for 6 hours
+          while ($true) { Write-Host "RDP Active..."; Start-Sleep -Seconds 300 }
