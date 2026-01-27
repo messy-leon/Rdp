@@ -22,22 +22,19 @@ jobs:
           sudo usermod -aG sudo RDP
           echo "RDP_PASS=$PASSWORD" >> $GITHUB_ENV
 
-      - name: Tailscale Login Link (Old Style)
+      - name: Get Tailscale Login URL
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
-          # Isse login URL generate hoga
-          sudo tailscale up --hostname=gh-linux-${{ github.run_id }} &
-          sleep 5
-          # URL ko logs mein dikhane ke liye
-          echo "=== TAILSCALE LOGIN URL ==="
-          sudo tailscale status || true
-          echo "==========================="
+          echo "=== 🔗 NICHE DIYE GAYE LINK PAR CLICK KAREIN ==="
+          # Ye command URL dikhayega aur 2 minute tak wait karega
+          timeout 2m sudo tailscale up --hostname=gh-linux-${{ github.run_id }} || true
+          echo "=============================================="
 
-      - name: Show Access Details
+      - name: Show Final Access Details
         run: |
-          echo -e "\n=== RDP LOGIN DETAILS ==="
+          echo -e "\n=== 🖥️ RDP LOGIN DETAILS ==="
           echo "Username: RDP"
           echo "Password: $RDP_PASS"
-          echo "IP: Tailscale connect karne ke baad dikhegi"
-          echo "=========================\n"
+          echo "IP: Login ke baad Tailscale App/Dashboard mein dekhein"
+          echo "===========================\n"
           while true; do sleep 300; done
