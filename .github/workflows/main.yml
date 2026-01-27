@@ -1,4 +1,4 @@
-name: Linux-RDP-Fixed-Final
+name: Linux-RDP-Ultimate-Fix
 on: 
   workflow_dispatch:
 
@@ -6,35 +6,44 @@ jobs:
   secure-rdp:
     runs-on: ubuntu-latest
     steps:
-      - name: Install Desktop and Tools
+      - name: Install Desktop and Core Tools
         run: |
           sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-session xrdp firefox dbus-x11
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies xrdp dbus-x11 firefox
+          # XRDP ko permission dena
+          sudo adduser xrdp ssl-cert
           sudo systemctl enable xrdp
           sudo systemctl start xrdp
 
-      - name: Setup User & Desktop Force-Start
+      - name: Fix Black Screen (startwm.sh edit)
+        run: |
+          # Ye step sabse zaroori hai black screen hatane ke liye
+          sudo sed -i 's/test -x \/etc\/X11\/Xsession && exec \/etc\/X11\/Xsession/#test -x \/etc\/X11\/Xsession && exec \/etc\/X11\/Xsession/g' /etc/xrdp/startwm.sh
+          sudo sed -i 's/exec \/bin\/sh \/etc\/X11\/Xsession/#exec \/bin\/sh \/etc\/X11\/Xsession/g' /etc/xrdp/startwm.sh
+          sudo sh -c 'echo "startxfce4" >> /etc/xrdp/startwm.sh'
+          sudo systemctl restart xrdp
+
+      - name: Setup RDP User
         run: |
           PASSWORD="Pass${{ github.run_id }}"
           sudo useradd -m RDP -s /bin/bash
           echo "RDP:$PASSWORD" | sudo chpasswd
           sudo usermod -aG sudo RDP
-          # Ye line black screen ko fix karegi:
-          sudo -u RDP bash -c 'echo "startxfce4" > ~/.xsession'
+          # User level par bhi xsession set karna
+          sudo -u RDP bash -c 'echo "xfce4-session" > ~/.xsession'
           echo "RDP_PASS=$PASSWORD" >> $GITHUB_ENV
 
-      - name: Tailscale Login
+      - name: Tailscale Connection
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
-          echo "=== 🔗 CLICK LINK TO LOGIN ==="
+          echo "=== 🔗 LOGIN LINK ==="
           timeout 2m sudo tailscale up --hostname=gh-linux-${{ github.run_id }} || true
-          echo "=============================="
 
-      - name: Access Details
+      - name: Final Details
         run: |
           echo -e "\n=== 🖥️ LOGIN DETAILS ==="
           echo "Username: RDP"
           echo "Password: $RDP_PASS"
-          echo "IP: Check in Tailscale App"
+          echo "App: Windows App (Microsoft)"
           echo "========================\n"
           while true; do sleep 300; done
