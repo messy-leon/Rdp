@@ -1,4 +1,4 @@
-name: Linux-RDP-With-URL
+name: Linux-RDP-Fixed-Final
 on: 
   workflow_dispatch:
 
@@ -9,32 +9,32 @@ jobs:
       - name: Install Desktop and Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xfce4 xfce4-session xrdp firefox
-          echo "xfce4-session" > ~/.xsession
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-session xrdp firefox dbus-x11
           sudo systemctl enable xrdp
           sudo systemctl start xrdp
 
-      - name: Setup User
+      - name: Setup User & Desktop Force-Start
         run: |
           PASSWORD="Pass${{ github.run_id }}"
           sudo useradd -m RDP -s /bin/bash
           echo "RDP:$PASSWORD" | sudo chpasswd
           sudo usermod -aG sudo RDP
+          # Ye line black screen ko fix karegi:
+          sudo -u RDP bash -c 'echo "startxfce4" > ~/.xsession'
           echo "RDP_PASS=$PASSWORD" >> $GITHUB_ENV
 
-      - name: Get Tailscale Login URL
+      - name: Tailscale Login
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
-          echo "=== 🔗 NICHE DIYE GAYE LINK PAR CLICK KAREIN ==="
-          # Ye command URL dikhayega aur 2 minute tak wait karega
+          echo "=== 🔗 CLICK LINK TO LOGIN ==="
           timeout 2m sudo tailscale up --hostname=gh-linux-${{ github.run_id }} || true
-          echo "=============================================="
+          echo "=============================="
 
-      - name: Show Final Access Details
+      - name: Access Details
         run: |
-          echo -e "\n=== 🖥️ RDP LOGIN DETAILS ==="
+          echo -e "\n=== 🖥️ LOGIN DETAILS ==="
           echo "Username: RDP"
           echo "Password: $RDP_PASS"
-          echo "IP: Login ke baad Tailscale App/Dashboard mein dekhein"
-          echo "===========================\n"
+          echo "IP: Check in Tailscale App"
+          echo "========================\n"
           while true; do sleep 300; done
