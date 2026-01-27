@@ -1,49 +1,37 @@
-name: Linux-RDP-Ultimate-Fix
-on: 
-  workflow_dispatch:
+name: Linux-RDP-Stable
+on: workflow_dispatch
 
 jobs:
-  secure-rdp:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-22.04  # Stable version use kar rahe hain
     steps:
-      - name: Install Desktop and Core Tools
+      - name: Install Desktop (Zero Errors)
         run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies xrdp dbus-x11 firefox
-          # XRDP ko permission dena
-          sudo adduser xrdp ssl-cert
-          sudo systemctl enable xrdp
-          sudo systemctl start xrdp
-
-      - name: Fix Black Screen (startwm.sh edit)
-        run: |
-          # Ye step sabse zaroori hai black screen hatane ke liye
-          sudo sed -i 's/test -x \/etc\/X11\/Xsession && exec \/etc\/X11\/Xsession/#test -x \/etc\/X11\/Xsession && exec \/etc\/X11\/Xsession/g' /etc/xrdp/startwm.sh
-          sudo sed -i 's/exec \/bin\/sh \/etc\/X11\/Xsession/#exec \/bin\/sh \/etc\/X11\/Xsession/g' /etc/xrdp/startwm.sh
-          sudo sh -c 'echo "startxfce4" >> /etc/xrdp/startwm.sh'
+          sudo apt update
+          sudo DEBIAN_FRONTEND=noninteractive apt install -y xfce4 xfce4-goodies xrdp
+          # XFCE ko default desktop set karna
+          sudo sed -i 's/allowed_users=console/allowed_users=anybody/g' /etc/xrdp/Xwrapper.config
+          echo "xfce4-session" > ~/.xsession
           sudo systemctl restart xrdp
 
-      - name: Setup RDP User
+      - name: Create RDP User
         run: |
           PASSWORD="Pass${{ github.run_id }}"
           sudo useradd -m RDP -s /bin/bash
           echo "RDP:$PASSWORD" | sudo chpasswd
           sudo usermod -aG sudo RDP
-          # User level par bhi xsession set karna
-          sudo -u RDP bash -c 'echo "xfce4-session" > ~/.xsession'
           echo "RDP_PASS=$PASSWORD" >> $GITHUB_ENV
 
-      - name: Tailscale Connection
+      - name: Tailscale Connect
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
-          echo "=== 🔗 LOGIN LINK ==="
-          timeout 2m sudo tailscale up --hostname=gh-linux-${{ github.run_id }} || true
+          # Hostname fix: Linux variable format
+          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-linux-${{ github.run_id }}
+          echo "TAILSCALE_IP=$(tailscale ip -4)" >> $GITHUB_ENV
 
-      - name: Final Details
+      - name: Display Access Info
         run: |
-          echo -e "\n=== 🖥️ LOGIN DETAILS ==="
-          echo "Username: RDP"
-          echo "Password: $RDP_PASS"
-          echo "App: Windows App (Microsoft)"
-          echo "========================\n"
+          echo "IP: $TAILSCALE_IP"
+          echo "User: RDP"
+          echo "Pass: $RDP_PASS"
           while true; do sleep 300; done
