@@ -1,4 +1,4 @@
-name: Linux-RDP-Fast
+name: Linux-RDP-Final
 on: 
   workflow_dispatch:
 
@@ -8,37 +8,37 @@ jobs:
     timeout-minutes: 3600
 
     steps:
-      - name: Fast GUI Install
+      - name: Super Fast GUI Install
         run: |
           sudo apt-get update
-          # Sirf zaroori files install kar rahe hain taaki time bache
-          sudo apt-get install -y --no-install-recommends xfce4 xfce4-session xrdp firefox-esr
+          # Firefox-esr ki jagah standard firefox use kar rahe hain
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 xfce4-session xrdp firefox
           echo "xfce4-session" > ~/.xsession
           sudo systemctl enable xrdp
           sudo systemctl start xrdp
 
-      - name: Setup User
+      - name: Setup RDP User
         run: |
-          # Mobile friendly password setup
+          # Mobile user ke liye aasaan password
           PASSWORD="Pass${{ github.run_id }}"
           sudo useradd -m RDP -s /bin/bash
           echo "RDP:$PASSWORD" | sudo chpasswd
           sudo usermod -aG sudo RDP
           echo "RDP_PASS=$PASSWORD" >> $GITHUB_ENV
 
-      - name: Tailscale Connect (FIXED)
+      - name: Tailscale Connection (No Errors)
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
-          # Hostname fix: Linux mein $GITHUB_RUN_ID use hota hai
+          # Hostname fix: Linux variables sahi se use kiye hain
           sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-linux-${{ github.run_id }}
           echo "TAILSCALE_IP=$(tailscale ip -4)" >> $GITHUB_ENV
 
-      - name: Final Access Details
+      - name: Get Access Details
         run: |
-          echo -e "\n=== ACCESS DETAILS ==="
-          echo "IP Address: $TAILSCALE_IP"
+          echo -e "\n=== 🚀 RDP READY HAI! ==="
+          echo "Address: $TAILSCALE_IP"
           echo "Username: RDP"
           echo "Password: $RDP_PASS"
-          echo "======================\n"
-          # Runner active rakhne ke liye
+          echo "=========================\n"
+          # Runner ko 6 ghante tak active rakhne ke liye
           while true; do sleep 300; done
