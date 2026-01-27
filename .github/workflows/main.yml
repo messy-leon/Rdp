@@ -1,37 +1,43 @@
-name: Linux-RDP-Stable
+name: Master-Linux-RDP
 on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: ubuntu-22.04  # Stable version use kar rahe hain
+    runs-on: ubuntu-latest
     steps:
-      - name: Install Desktop (Zero Errors)
+      - name: Install Desktop (Fast & Stable)
         run: |
           sudo apt update
-          sudo DEBIAN_FRONTEND=noninteractive apt install -y xfce4 xfce4-goodies xrdp
-          # XFCE ko default desktop set karna
-          sudo sed -i 's/allowed_users=console/allowed_users=anybody/g' /etc/xrdp/Xwrapper.config
+          # dbus-x11 aur xfce4-session black screen ko khatam karte hain
+          sudo DEBIAN_FRONTEND=noninteractive apt install -y xfce4 xfce4-goodies xrdp dbus-x11 firefox
+          
+          # XRDP Configuration (Simple & Working)
+          sudo adduser xrdp ssl-cert
           echo "xfce4-session" > ~/.xsession
-          sudo systemctl restart xrdp
+          sudo systemctl enable xrdp
+          sudo systemctl start xrdp
 
-      - name: Create RDP User
+      - name: Setup User
         run: |
+          # Mobile user ke liye aasaan password
           PASSWORD="Pass${{ github.run_id }}"
           sudo useradd -m RDP -s /bin/bash
           echo "RDP:$PASSWORD" | sudo chpasswd
           sudo usermod -aG sudo RDP
           echo "RDP_PASS=$PASSWORD" >> $GITHUB_ENV
 
-      - name: Tailscale Connect
+      - name: Tailscale Connection
         run: |
           curl -fsSL https://tailscale.com/install.sh | sh
-          # Hostname fix: Linux variable format
-          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-linux-${{ github.run_id }}
-          echo "TAILSCALE_IP=$(tailscale ip -4)" >> $GITHUB_ENV
+          # Agar Secret mein Auth Key hai toh turant connect hoga
+          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-linux-${{ github.run_id }} || sudo tailscale up --hostname=gh-linux-${{ github.run_id }}
 
-      - name: Display Access Info
+      - name: Access Details
         run: |
-          echo "IP: $TAILSCALE_IP"
-          echo "User: RDP"
-          echo "Pass: $RDP_PASS"
+          echo -e "\n=== 🖥️ RDP READY HAI! ==="
+          echo "Username: RDP"
+          echo "Password: $RDP_PASS"
+          echo "IP: Check in Tailscale App/Dashboard"
+          echo "=========================\n"
+          # 6 ghante tak active rakhne ke liye
           while true; do sleep 300; done
